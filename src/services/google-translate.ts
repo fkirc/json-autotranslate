@@ -1,10 +1,11 @@
-import { Translate } from '@google-cloud/translate';
+//import { Translate } from '@google-cloud/translate';
 import {
   replaceInterpolations,
   reInsertInterpolations,
   Matcher,
 } from '../matchers';
 import { TranslationService, TString } from '.';
+import { TranslationServiceClient } from '@google-cloud/translate';
 
 // Contains replacements for language codes
 const codeMap = {
@@ -12,9 +13,10 @@ const codeMap = {
 };
 
 export class GoogleTranslate implements TranslationService {
-  private translate: Translate;
+  //private translate: Translate;
   private interpolationMatcher: Matcher;
-  private supportedLanguages: string[] = [];
+  private keyFileName: string | null;
+  //private supportedLanguages: string[] = [];
 
   public name = 'Google Translate';
 
@@ -26,23 +28,25 @@ export class GoogleTranslate implements TranslationService {
   }
 
   async initialize(config?: string, interpolationMatcher?: Matcher) {
-    this.translate = new Translate({
-      autoRetry: true,
-      keyFilename: config || undefined,
-    });
+    // this.translate = new Translate({
+    //   autoRetry: true,
+    //   keyFilename: config || undefined,
+    // });
+    this.keyFileName = config;
 
     this.interpolationMatcher = interpolationMatcher;
-    this.supportedLanguages = await this.getAvailableLanguages();
+    //this.supportedLanguages = await this.getAvailableLanguages();
   }
 
   async getAvailableLanguages() {
-    const [languages] = await this.translate.getLanguages();
-    console.log(languages);
-    return languages.map((l) => l.code.toLowerCase());
+    // const [languages] = await this.translate.getLanguages();
+    // console.log(languages);
+    // return languages.map((l) => l.code.toLowerCase());
   }
 
   supportsLanguage(language: string) {
-    return this.supportedLanguages.includes(language);
+    return true;
+    //return this.supportedLanguages.includes(language);
   }
 
   cleanLanguageCode(languageCode: string) {
@@ -57,6 +61,10 @@ export class GoogleTranslate implements TranslationService {
   }
 
   async translateStrings(strings: TString[], from: string, to: string) {
+    const translationClient = new TranslationServiceClient({
+      keyFilename: this.keyFileName,
+    });
+
     return Promise.all(
       strings.map(async ({ key, value }) => {
         const { clean, replacements } = replaceInterpolations(
@@ -64,10 +72,24 @@ export class GoogleTranslate implements TranslationService {
           this.interpolationMatcher,
         );
 
-        const [translationResult] = await this.translate.translate(clean, {
-          from: this.cleanLanguageCode(from),
-          to: this.cleanLanguageCode(to),
-        });
+        const glossaryConfig = {
+          glossary: `projects/project-id/locations/location/glossaries/glossary`,
+        };
+        const request = {
+          parent: `projects/project-id/locations/location`,
+          contents: [clean],
+          mimeType: 'text/plain',
+          sourceLanguageCode: this.cleanLanguageCode(from),
+          targetLanguageCode: this.cleanLanguageCode(to),
+          glossaryConfig: glossaryConfig,
+        };
+        const [ response ] = await translationClient.translateText(request);
+        const translationResult = JSON.stringify(response.glossaryTranslations);
+
+        // const [translationResult] = await this.translate.translate(clean, {
+        //   from: this.cleanLanguageCode(from),
+        //   to: this.cleanLanguageCode(to),
+        // });
 
         return {
           key: key,

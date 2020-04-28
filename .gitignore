@@ -67,3 +67,6 @@ typings/
 # dotenv environment variables file
 .env
 .env.test
+
+# WebStorm
+.idea/
