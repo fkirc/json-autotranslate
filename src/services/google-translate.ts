@@ -6,6 +6,9 @@ import {
 } from '../matchers';
 import { TranslationService, TString } from '.';
 import { TranslationServiceClient } from '@google-cloud/translate';
+import { google } from '@google-cloud/translate/build/protos/protos';
+import TranslateTextGlossaryConfig = google.cloud.translation.v3.TranslateTextGlossaryConfig;
+import ITranslateTextGlossaryConfig = google.cloud.translation.v3beta1.ITranslateTextGlossaryConfig;
 
 // Contains replacements for language codes
 const codeMap = {
@@ -67,24 +70,34 @@ export class GoogleTranslate implements TranslationService {
 
     return Promise.all(
       strings.map(async ({ key, value }) => {
-        const { clean, replacements } = replaceInterpolations(
+        console.warn("Promise.call", key, value);
+        let { clean, replacements } = replaceInterpolations(
           value,
           this.interpolationMatcher,
         );
+        const location = "us-central1";
+        const glossaryId = "en_de_glossary";
+        const projectId: string = await translationClient.getProjectId();
 
-        const glossaryConfig = {
-          glossary: `projects/project-id/locations/location/glossaries/glossary`,
+        const glossaryConfig: ITranslateTextGlossaryConfig = {
+          glossary: `projects/${projectId}/locations/${location}/glossaries/${glossaryId}`,
+          ignoreCase: true,
         };
+        if (clean.length === 0) {
+          clean = "Hello"; // TODO
+        }
         const request = {
-          parent: `projects/project-id/locations/location`,
+          parent: `projects/${projectId}/locations/${location}`,
           contents: [clean],
           mimeType: 'text/plain',
           sourceLanguageCode: this.cleanLanguageCode(from),
           targetLanguageCode: this.cleanLanguageCode(to),
           glossaryConfig: glossaryConfig,
         };
+        console.warn("Going to fire request", request);
         const [ response ] = await translationClient.translateText(request);
-        const translationResult = JSON.stringify(response.glossaryTranslations);
+        const results = response.glossaryTranslations || response.translations;
+        const translationResult = results[0].translatedText;
 
         // const [translationResult] = await this.translate.translate(clean, {
         //   from: this.cleanLanguageCode(from),
